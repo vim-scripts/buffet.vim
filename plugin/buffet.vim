@@ -1,4 +1,4 @@
-" Buffet Plugin for VIM > 7.3 version 1.0
+" Buffet Plugin for VIM > 7.3 version 1.05
 "
 " A fast, simple and easy to use pluggin for switching and managing buffers.
 "
@@ -6,7 +6,6 @@
 "
 " Copy the file buffet.vim to the plugins directory.
 " The command to open the buffer list is 
-" 
 " :Bufferlist
 "
 " A horizontal window is opened with a list of buffer. the buffer numbers are
@@ -36,12 +35,12 @@
 "
 " map <F2> :Bufferlist<CR>
 "
-" Last Change:	2011 Aug
+" Last Change:	2012 Jan
 " Maintainer:	Sandeep.c.r<sandeepcr2@gmail.com>
 "
 "
 function! s:open_new_window(dim)
-	exe a:dim . 'new buflisttempbuffer412393'  
+	exe 'topleft '.a:dim . 'new buflisttempbuffer412393'  
 	set nonu
 	setlocal bt=nofile
 	setlocal modifiable
@@ -49,6 +48,7 @@ function! s:open_new_window(dim)
 	setlocal bufhidden=hide
 	setlocal noswapfile
 	setlocal scrolloff=0
+	setlocal nowrap
 	setlocal sidescrolloff=0
 	return bufnr('%')
 endfunction 
@@ -85,15 +85,21 @@ function! s:display_buffer_list()
 			let l:maxlen = l:temp
 		endif
 	endfor
-			call setline(1,"Buffet-1.0 ( Enter Number to search for a buffer number )")
+	call setline(1,"Buffet-1.05 ( Enter Number to search for a buffer number )")
 	for l:i in s:bufrecent
+			let l:thisbufno = str2nr(l:i)
 			let l:bufname = s:bufferlistlite[l:i]
 			let l:buftailname =fnamemodify(l:bufname,':t')
 			let l:bufheadlname =fnamemodify(l:bufname,':h')
+			if(getbufvar(l:thisbufno,'&modified')) 
+				let l:bufheadlname= "(+) ".l:bufheadlname
+			endif
 			let l:padlength = l:maxlen - strlen(l:buftailname) + 2
-			let l:short_file_name = " ".repeat(' ',2-strlen(l:i)).l:i .'  '. l:buftailname.repeat(' ',l:padlength) . fnamemodify(l:bufname,':h') 
-			if(getbufvar(str2nr(l:i),'&modified')) 
-				let l:short_file_name = l:short_file_name." (+)"
+			let l:short_file_name = " ".repeat(' ',2-strlen(l:i)).l:i .'  '. l:buftailname.repeat(' ',l:padlength) . l:bufheadlname 
+
+			let l:short_file_name = l:short_file_name ." [".getbufvar(l:thisbufno,'&ff')."][".getbufvar(l:thisbufno,'&fileencoding').']'
+			if(exists("s:buftotabwindow[l:thisbufno]"))
+				let l:short_file_name = l:short_file_name .", Tab:".s:buftotabwindow[l:thisbufno][0]." Window:".s:buftotabwindow[l:thisbufno][1]
 			endif
 			call setline(l:line,l:short_file_name)
 			if(l:i==s:sourcebuffer)
@@ -109,7 +115,7 @@ function! s:display_buffer_list()
 	endfor
 			call setline(l:line,"")
 			let l:line+=1
-			call setline(l:line,"Controls - Enter(Replace current buffer) | o(Make window fill with selected buffer) | h/v(Horizontal/Vertical Split) | g(Go to buffer window if it is visible) | d(Delete buffer) ")
+			call setline(l:line,"Controls - Enter(Replace current buffer) | o(Make window fill with selected buffer) | h/v(Horizontal/Vertical Split) | g(Go to buffer window if it is visible in any tab) | d(Delete buffer) ")
 			let l:fg = synIDattr(hlID('Statement'),'fg','Question')
 			exe 'highlight buffethelpline guibg=black'
 			exe 'highlight buffethelpline guifg=orange'
@@ -122,6 +128,7 @@ function! s:close()
 		unlet t:tlistbuf
 		:bdelete buflisttempbuffer412393
 		echo ''
+		exe s:sourcewindow. ' wincmd w'
 	endif
 endfunction
 
@@ -159,7 +166,7 @@ function! s:press(num)
 		let s:keybuf = s:keybuf . a:num
 	endif
 	setlocal modifiable
-	call setline(1 ,'Buffet-1.0 - Searching for buffer:'.s:keybuf.' (Use backspace to edit)')
+	call setline(1 ,'Buffet-1.05 - Searching for buffer:'.s:keybuf.' (Use backspace to edit)')
 	let l:index = index(s:bufrecent,s:keybuf)
 	"echo l:index
 	"echo s:bufrecent
@@ -184,6 +191,15 @@ function! s:toggle()
 		endfor
 	endif
 	let s:sourcebuffer = bufnr('%')
+	let s:sourcewindow = winnr()
+	let s:buftotabwindow = {}
+	for l:i in range(tabpagenr('$'))
+	   let l:windowno = 1
+	   for l:bufno in tabpagebuflist(l:i + 1)
+		let s:buftotabwindow[l:bufno] = [l:i+1,l:windowno]
+		let l:windowno += 1
+	   endfor
+	endfor
 	let t:tlistbuf = s:open_new_window(len(s:bufrecent)+4)
 	let s:buflistwindow = winnr()
 	setlocal cursorline
@@ -249,9 +265,14 @@ endfunction
 function! s:gotowindow()
 	let l:llindex= line('.') - 2
 	if(exists("s:bufrecent[l:llindex]"))
-		exe s:buflistwindow . ' wincmd w'
-		call s:close()
-		call s:goto_buffer(s:bufrecent[l:llindex])
+		if(exists("s:buftotabwindow[s:bufrecent[l:llindex]]"))
+			exe s:buflistwindow . ' wincmd w'
+			let l:target = s:bufrecent[l:llindex]
+			call s:close()
+			call s:goto_buffer(l:target)
+		else
+			call s:printmessage("Buffer not showing in any tab.")
+		endif
 	else
 		call s:close()
 	endif
@@ -261,10 +282,11 @@ function! s:gototab(isonly)
 	let l:llindex= line('.') - 2
 	if(exists("s:bufrecent[l:llindex]"))
 		exe s:buflistwindow . ' wincmd w'
+		let l:target = s:bufrecent[l:llindex]
 		call s:close()
-		call s:switch_buffer(s:bufrecent[l:llindex])
+		call s:switch_buffer(l:target)
 		if(a:isonly == 1 && winnr('$')>1)
-			exe 'only'
+			exe 'only!'
 		endif
 	else
 		call s:close()
@@ -275,17 +297,20 @@ function! s:split(mode)
 	let l:llindex= line('.') - 2
 	if(exists("s:bufrecent[l:llindex]"))
 		exe s:buflistwindow . ' wincmd w'
+		let l:target = s:bufrecent[l:llindex]
 		call s:close()
-		call s:split_buffer(s:bufrecent[l:llindex],a:mode)
+		call s:split_buffer(l:target,a:mode)
 	else
 		call s:close()
 	endif
 endfunction
 
 function! s:goto_buffer(bufferno)
-	let l:windowofbuffer = bufwinnr(a:bufferno)
-	if(l:windowofbuffer != -1)
-		exe l:windowofbuffer. ' wincmd w'
+	if(exists("s:buftotabwindow[a:bufferno]"))
+		let l:tabno = s:buftotabwindow[a:bufferno][0]
+		let l:winno = s:buftotabwindow[a:bufferno][1]
+		exe "tabn" .l:tabno 
+		exe l:winno. ' wincmd w'
 	endif
 endfunction
 
