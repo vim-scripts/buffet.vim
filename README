@@ -1,0 +1,35 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=3896
+
+When the plugin is invoked a horizontal window is opened with a list of buffers. the buffer numbers are also displayed along side. 
+
+Screenshot: http://i43.tinypic.com/33kadsx.png
+
+github repo : https://github.com/sandeepcr529/Buffet.vim
+
+The user select a buffer by
+
+ 1.Entering the buffer number using keyboard. Just start typing the number using keyboard.
+ The plugin will search for the buffer with that number and will keep going to the matching
+ buffers. Entered number will be shown at the top you can use backspace to edit it.When you 
+ are in the desired buffer, press enter or any control keys that are
+ displayed at the bottom to execute any command available, on that buffer
+
+ Available commands
+ 
+ Enter(Replace current buffer) 
+ o - (Make window fill with selected buffer )
+ h/v - (Horizontal/vertical Split) 
+ g - (Go to buffer window if it is visible in a tab) 
+ d - (Delete selected buffer) 
+ t - (Open buffer in a new tab)
+ c - (Clear all the diff views)
+ m - Toggle detailed view for files
+ x - Close a window, in whatever tab it is displayed.
+'-' - (Opens a vertical window showing difference of the selected buffer with the current buffer. The scrolling of the new window will be bound to the current buffer )
+
+ 2.Move up or down using the navigation keys to reach the buffer line.
+
+ 3.Double click on a buffer line using the mouse. Will immediately switch to
+ that buffer
+
+If you are having any issues using the plugin or if you find any bugs, please let me know at sandeepcr2@gmail.com. 
