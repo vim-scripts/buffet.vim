@@ -1,4 +1,4 @@
-" Buffet Plugin for VIM > 7.3 version 1.05
+" Buffet Plugin for VIM > 7.3 version 1.10
 "
 " A fast, simple and easy to use pluggin for switching and managing buffers.
 "
@@ -21,7 +21,9 @@
 " 
 " Enter(Replace current buffer) 
 " o - make window fill with selected buffer 
-" h/v - (Horozontal/vertical Split) 
+" h - (Horizontal Split) 
+" v - (Vertical Split) 
+" - - (Vertical Diff Split) 
 " g - (Go to buffer window if it is visible) 
 " d - (Delete selected buffer) 
 "
@@ -47,9 +49,7 @@ function! s:open_new_window(dim)
 	setlocal bt=nowrite
 	setlocal bufhidden=hide
 	setlocal noswapfile
-	setlocal scrolloff=0
 	setlocal nowrap
-	setlocal sidescrolloff=0
 	return bufnr('%')
 endfunction 
 function! s:open_new_vertical_window(dim)
@@ -59,8 +59,6 @@ function! s:open_new_vertical_window(dim)
 	setlocal bt=nowrite
 	setlocal bufhidden=hide
 	setlocal noswapfile
-	setlocal scrolloff=0
-	setlocal sidescrolloff=0
 	return bufnr('%')
 endfunction 	
 function! s:cursormove()
@@ -71,7 +69,7 @@ function! s:cursormove()
 		call cursor(len(s:bufrecent)+1,3)
 	endif
 endfunction
-function! s:display_buffer_list()
+function! s:display_buffer_list(gotolastbuffer)
 	let l:line = 2
 	if(len(s:bufrecent) == 0)
 		let s:bufrecent = s:bufferlistlite
@@ -85,7 +83,7 @@ function! s:display_buffer_list()
 			let l:maxlen = l:temp
 		endif
 	endfor
-	call setline(1,"Buffet-1.05 ( Enter Number to search for a buffer number )")
+	call setline(1,"Buffet-1.10 ( Enter Number to search for a buffer number )")
 	for l:i in s:bufrecent
 			let l:thisbufno = str2nr(l:i)
 			let l:bufname = s:bufferlistlite[l:i]
@@ -113,19 +111,27 @@ function! s:display_buffer_list()
 			endif
 			let l:line += 1
 	endfor
-			call setline(l:line,"")
-			let l:line+=1
-			call setline(l:line,"Controls - Enter(Replace current buffer) | o(Make window fill with selected buffer) | h/v(Horizontal/Vertical Split) | g(Go to buffer window if it is visible in any tab) | d(Delete buffer) ")
-			let l:fg = synIDattr(hlID('Statement'),'fg','Question')
-			exe 'highlight buffethelpline guibg=black'
-			exe 'highlight buffethelpline guifg=orange'
-			exe '2match buffethelpline /\%1l\|\%'.l:line.'l.\%>1c/'
-	call cursor(3,3)
+	call setline(l:line,"")
+	let l:line+=1
+	call setline(l:line,"Enter(Replace current buffer) | h/v/- (Horizontal/Vertical/Vertical Diff Split) | o(Maximize buffer) | g(Go to buffer window) | d(Delete buffer) ")
+	let l:fg = synIDattr(hlID('Statement'),'fg','Question')
+	exe 'highlight buffethelpline guibg=black'
+	exe 'highlight buffethelpline guifg=orange'
+	exe '2match buffethelpline /\%1l\|\%'.l:line.'l.\%>1c/'
+	if(a:gotolastbuffer==1)
+		call cursor(3,3)
+	else
+		if(s:lineonclose >len(s:bufrecent)+1) 
+			let s:lineonclose -=1
+		endif
+		call cursor(s:lineonclose,3)
+	endif
 endfunction
 
 function! s:close()
 	if(exists("t:tlistbuf"))
 		unlet t:tlistbuf
+		let s:lineonclose = line('.')
 		:bdelete buflisttempbuffer412393
 		echo ''
 		exe s:sourcewindow. ' wincmd w'
@@ -166,7 +172,7 @@ function! s:press(num)
 		let s:keybuf = s:keybuf . a:num
 	endif
 	setlocal modifiable
-	call setline(1 ,'Buffet-1.05 - Searching for buffer:'.s:keybuf.' (Use backspace to edit)')
+	call setline(1 ,'Buffet-1.10 - Searching for buffer:'.s:keybuf.' (Use backspace to edit)')
 	let l:index = index(s:bufrecent,s:keybuf)
 	"echo l:index
 	"echo s:bufrecent
@@ -176,7 +182,7 @@ function! s:press(num)
 	endif
 	setlocal nomodifiable
 endfunction
-function! s:toggle()
+function! s:toggle(gotolastbuffer)
 
 	let s:keybuf = ''
 	if(exists("t:tlistbuf"))
@@ -201,11 +207,15 @@ function! s:toggle()
 	   endfor
 	endfor
 	let t:tlistbuf = s:open_new_window(len(s:bufrecent)+4)
+	set nodiff
+	set noscrollbind
 	let s:buflistwindow = winnr()
 	setlocal cursorline
-	call s:display_buffer_list()
+	call s:display_buffer_list(a:gotolastbuffer)
 	"call matchadd('String','[\/\\][^\/\\]*$')  
-	call cursor(3,3)
+	if(a:gotolastbuffer==1)
+		call cursor(3,3)
+	endif
 	setlocal nomodifiable
 	map <buffer> <silent> <2-leftrelease> :call <sid>gototab(0)<cr>
 	map <buffer> <silent> <C-R> :call <sid>gototab(0)<cr>
@@ -233,6 +243,7 @@ function! s:toggle()
 	map <buffer> <silent> 7 :call <sid>press(7)<cr>
 	map <buffer> <silent> 8 :call <sid>press(8)<cr>
 	map <buffer> <silent> 9 :call <sid>press(9)<cr>
+	map <buffer> <silent> - :call <sid>diff_split('v')<cr>
 	map <buffer> <silent> <BS> :call <sid>press(-1)<cr>
 	map <buffer> <silent> <Esc> :call <sid>close()<cr>
 	augroup  Tlistaco1
@@ -250,8 +261,8 @@ function! s:deletebuffer(force)
 				call s:printmessage("Buffer contents modified. Use 'D' to force delete.")
 			else
 				exe "bdelete! ".l:selectedbuffer
-				call s:toggle()
-				call s:toggle()
+				call s:toggle(0)
+				call s:toggle(0)
 			endif
 		else
 			call s:printmessage("Cannot delete buffer when it is displayed in a window")
@@ -293,6 +304,19 @@ function! s:gototab(isonly)
 	endif
 endfunction
 
+function! s:diff_split(mode)
+	let l:llindex= line('.') - 2
+	if(exists("s:bufrecent[l:llindex]"))
+		exe s:buflistwindow . ' wincmd w'
+		let l:target = s:bufrecent[l:llindex]
+		call s:close()
+		call s:diff_split_buffer(l:target,a:mode)
+	else
+		call s:close()
+	endif
+endfunction
+
+
 function! s:split(mode)
 	let l:llindex= line('.') - 2
 	if(exists("s:bufrecent[l:llindex]"))
@@ -313,6 +337,33 @@ function! s:goto_buffer(bufferno)
 		exe l:winno. ' wincmd w'
 	endif
 endfunction
+function! s:removedifforsource()
+	if(exists("b:buffet_sourcewindowfordiff"))
+		call setwinvar(b:buffet_sourcewindowfordiff,"&diff",0)
+		call setwinvar(b:buffet_sourcewindowfordiff,"&scrollbind",0)
+	endif
+endfunction
+
+function! s:diff_split_buffer(bufferno,mode)
+	if(a:mode == 'v')
+		exe 'belowright vert '.a:bufferno. ' sbuf'
+	elseif(a:mode == 'h')
+		exe 'belowright ' .a:bufferno. ' sbuf'
+	endif
+	if(exists("s:buflinenos[a:bufferno]"))
+		exe "normal "+s:buflinenos[a:bufferno] + "gg"
+	endif
+	call setwinvar(s:sourcewindow,"&diff",1)
+	call setwinvar(s:sourcewindow,"&scrollbind",1)
+	let b:buffet_sourcewindowfordiff = s:sourcewindow
+	augroup  Tlistaco1
+			autocmd!
+			au  BufHidden <buffer> call <sid>removedifforsource()
+	augroup END
+
+	setlocal diff
+	setlocal scrollbind
+endfunction
 
 
 function! s:split_buffer(bufferno,mode)
@@ -324,10 +375,14 @@ function! s:split_buffer(bufferno,mode)
 	if(exists("s:buflinenos[a:bufferno]"))
 		exe "normal "+s:buflinenos[a:bufferno] + "gg"
 	endif
+	set nodiff
+	set noscrollbind
 endfunction
 
 function! s:switch_buffer(bufferno)
 	exe a:bufferno. ' buf!'
+	set nodiff
+	set noscrollbind
 	if(exists("s:buflinenos[a:bufferno]"))
 		exe "normal "+s:buflinenos[a:bufferno] + "gg"
 	endif
@@ -351,10 +406,11 @@ let s:buflinenos = {}
 let s:bufferlistlite =  {}
 let s:bufliststatus  = 0
 let s:keybuf  = ''
+let s:lineonclose  = 3
 augroup Tlistacom
 		autocmd!
 		au  BufEnter * call <sid>updaterecent()
 		au  BufLeave * call <sid>savelineno()
 augroup END
 
-command! Bufferlist :call <sid>toggle()
+command! Bufferlist :call <sid>toggle(1)
