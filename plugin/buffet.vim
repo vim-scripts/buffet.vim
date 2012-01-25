@@ -1,4 +1,4 @@
-" Buffet Plugin for VIM > 7.3 version 1.10
+" Buffet Plugin for VIM > 7.3 version 1.15
 "
 " A fast, simple and easy to use pluggin for switching and managing buffers.
 "
@@ -42,7 +42,7 @@
 "
 "
 function! s:open_new_window(dim)
-	exe 'topleft '.a:dim . 'new buflisttempbuffer412393'  
+	exe s:currentposition. ' '.a:dim . 'new buflisttempbuffer412393'  
 	set nonu
 	setlocal bt=nofile
 	setlocal modifiable
@@ -83,17 +83,19 @@ function! s:display_buffer_list(gotolastbuffer)
 			let l:maxlen = l:temp
 		endif
 	endfor
-	call setline(1,"Buffet-1.10 ( Enter Number to search for a buffer number )")
+	call setline(1,"Buffet-1.15 ( Enter Number to search for a buffer number )")
 	for l:i in s:bufrecent
 			let l:thisbufno = str2nr(l:i)
 			let l:bufname = s:bufferlistlite[l:i]
 			let l:buftailname =fnamemodify(l:bufname,':t')
 			let l:bufheadlname =fnamemodify(l:bufname,':h')
 			if(getbufvar(l:thisbufno,'&modified')) 
-				let l:bufheadlname= "(+) ".l:bufheadlname
+				let l:modifiedflag = " (+) "
+			else 
+				let l:modifiedflag = "     "
 			endif
 			let l:padlength = l:maxlen - strlen(l:buftailname) + 2
-			let l:short_file_name = " ".repeat(' ',2-strlen(l:i)).l:i .'  '. l:buftailname.repeat(' ',l:padlength) . l:bufheadlname 
+			let l:short_file_name = " ".repeat(' ',2-strlen(l:i)).l:i .'  '. l:buftailname.repeat(' ',l:padlength) .l:modifiedflag. l:bufheadlname 
 
 			let l:short_file_name = l:short_file_name ." [".getbufvar(l:thisbufno,'&ff')."][".getbufvar(l:thisbufno,'&fileencoding').']'
 			if(exists("s:buftotabwindow[l:thisbufno]"))
@@ -113,7 +115,7 @@ function! s:display_buffer_list(gotolastbuffer)
 	endfor
 	call setline(l:line,"")
 	let l:line+=1
-	call setline(l:line,"Enter(Replace current buffer) | h/v/- (Horizontal/Vertical/Vertical Diff Split) | o(Maximize buffer) | g(Go to buffer window) | d(Delete buffer) ")
+	call setline(l:line,"Enter(Replace current buffer) | h/v/-/c (Horizontal/Vertical/Vertical Diff Split/Clear Diff) | o(Maximize buffer) | t(Open buffer in a new tab) | g(Go to buffer window) | d(Delete buffer) ")
 	let l:fg = synIDattr(hlID('Statement'),'fg','Question')
 	exe 'highlight buffethelpline guibg=black'
 	exe 'highlight buffethelpline guifg=orange'
@@ -172,7 +174,7 @@ function! s:press(num)
 		let s:keybuf = s:keybuf . a:num
 	endif
 	setlocal modifiable
-	call setline(1 ,'Buffet-1.10 - Searching for buffer:'.s:keybuf.' (Use backspace to edit)')
+	call setline(1 ,'Buffet-1.15 - Searching for buffer:'.s:keybuf.' (Use backspace to edit)')
 	let l:index = index(s:bufrecent,s:keybuf)
 	"echo l:index
 	"echo s:bufrecent
@@ -181,6 +183,16 @@ function! s:press(num)
 		exe "normal "+l:index+ "gg"
 	endif
 	setlocal nomodifiable
+endfunction
+
+function! s:togglesw()
+	let s:currentposition = ''
+	call s:toggle(1)
+endfunction
+
+function! s:toggletop()
+	let s:currentposition = 'topleft'
+	call s:toggle(1)
 endfunction
 function! s:toggle(gotolastbuffer)
 
@@ -220,6 +232,8 @@ function! s:toggle(gotolastbuffer)
 	map <buffer> <silent> <2-leftrelease> :call <sid>gototab(0)<cr>
 	map <buffer> <silent> <C-R> :call <sid>gototab(0)<cr>
 	map <buffer> <silent> <C-M> :call <sid>gototab(0)<cr>
+	map <buffer> <silent> c :call <sid>cleardiff()<cr>
+	map <buffer> <silent> C :call <sid>cleardiff()<cr>
 	map <buffer> <silent> d :call <sid>deletebuffer(0)<cr>
 	map <buffer> <silent> D :call <sid>deletebuffer(1)<cr>
 	map <buffer> <silent> o :call <sid>gototab(1)<cr>
@@ -228,6 +242,8 @@ function! s:toggle(gotolastbuffer)
 	map <buffer> <silent> G :call <sid>gotowindow()<cr>
 	map <buffer> <silent> s :call <sid>split('h')<cr>
 	map <buffer> <silent> S :call <sid>split('h')<cr>
+	map <buffer> <silent> t :call <sid>openintab()<cr>
+	map <buffer> <silent> T :call <sid>openintab()<cr>
 	map <buffer> <silent> h :call <sid>split('h')<cr>
 	map <buffer> <silent> H :call <sid>split('h')<cr>
 	map <buffer> <silent> v :call <sid>split('v')<cr>
@@ -252,26 +268,40 @@ function! s:toggle(gotolastbuffer)
 			au  CursorMoved <buffer> call <sid>cursormove()
 	augroup END
 endfunction
+function! s:cleardiff()
+	for i in range(1,winnr('$'))
+		call setwinvar(i,"&diff",0)
+		call setwinvar(i,"&scrollbind",0)
+	endfor
+endfunction
 function! s:deletebuffer(force)
 	let l:llindex= line('.') - 2
 	if(exists("s:bufrecent[l:llindex]") )
 		let l:selectedbuffer = str2nr(s:bufrecent[l:llindex])
-		if(bufwinnr(l:selectedbuffer)==-1)
 			if(getbufvar(str2nr(l:selectedbuffer),'&modified') && a:force == 0 ) 
 				call s:printmessage("Buffer contents modified. Use 'D' to force delete.")
 			else
+				call s:toggle(0)
 				exe "bdelete! ".l:selectedbuffer
 				call s:toggle(0)
-				call s:toggle(0)
 			endif
-		else
-			call s:printmessage("Cannot delete buffer when it is displayed in a window")
-		endif
 	else
 		call s:close()
 	endif
 endfunction
 
+function! s:openintab()
+	let l:llindex= line('.') - 2
+	if(exists("s:bufrecent[l:llindex]"))
+			exe s:buflistwindow . ' wincmd w'
+			let l:target = s:bufrecent[l:llindex]
+			call s:close()
+			exe "tabnew"
+			exe l:target. ' buf!'
+	else
+		call s:close()
+	endif
+endfunction
 
 function! s:gotowindow()
 	let l:llindex= line('.') - 2
@@ -356,9 +386,9 @@ function! s:diff_split_buffer(bufferno,mode)
 	call setwinvar(s:sourcewindow,"&diff",1)
 	call setwinvar(s:sourcewindow,"&scrollbind",1)
 	let b:buffet_sourcewindowfordiff = s:sourcewindow
-	augroup  Tlistaco1
+	augroup  Tlistaco2
 			autocmd!
-			au  BufHidden <buffer> call <sid>removedifforsource()
+			au  BufWinLeave <buffer> call <sid>removedifforsource()
 	augroup END
 
 	setlocal diff
@@ -407,10 +437,12 @@ let s:bufferlistlite =  {}
 let s:bufliststatus  = 0
 let s:keybuf  = ''
 let s:lineonclose  = 3
+let s:currentposition  = ''
 augroup Tlistacom
 		autocmd!
 		au  BufEnter * call <sid>updaterecent()
 		au  BufLeave * call <sid>savelineno()
 augroup END
 
-command! Bufferlist :call <sid>toggle(1)
+command! Bufferlist :call <sid>toggletop()
+command! Bufferlistsw :call <sid>togglesw()
